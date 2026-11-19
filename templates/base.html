@@ -32,7 +32,9 @@
   .flash { padding:10px 14px; border-radius:6px; margin-bottom:12px; }
   .flash.ok { background:#ecfdf3; color:var(--ok); } .flash.error { background:#fef3f2; color:var(--bad); }
   .pill { display:inline-block; padding:1px 8px; border-radius:99px; font-size:12px; background:#eef2f6; }
-  .pill.running, .pill.stopping { background:#eff4ff; color:var(--brand); }
+  .pill.running, .pill.stopping, .pill.queued { background:#eff4ff; color:var(--brand); }
+  .pill.cooling, .pill.short { background:#fffaeb; color:var(--warn); }
+  .pill.done, .pill.split { background:#ecfdf3; color:var(--ok); }
   .pill.finished { background:#ecfdf3; color:var(--ok); }
   .pill.blocked, .pill.failed { background:#fef3f2; color:var(--bad); }
   .pill.stopped, .pill.interrupted { background:#fffaeb; color:var(--warn); }
@@ -51,6 +53,8 @@
     <a href="{{ url_for('dashboard') }}">Dashboard</a>
     <a href="{{ url_for('programmes') }}">Programmes</a>
     <a href="{{ url_for('universities') }}">Universities</a>
+    <a href="{{ url_for('coverage') }}">Coverage</a>
+    <a href="{{ url_for('changes') }}">Changes</a>
     {% if user.role == 'admin' %}<a href="{{ url_for('users') }}">Users</a>{% endif %}
     <a href="{{ url_for('account') }}">My account</a>
   </nav>

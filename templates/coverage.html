@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Coverage{% endblock %}
+{% block body %}
+<h1>Coverage</h1>
+<div class="grid">
+  <div class="card stat"><b>{{ "{:,}".format(stored.get('progs', 0)) }}</b>
+    <span>programmes stored{% if api_total %} of {{ "{:,}".format(api_total) }} listed by the API
+      ({{ "%.1f"|format(100 * stored.get('progs', 0) / api_total) }}%){% endif %}</span></div>
+  <div class="card stat"><b>{{ "{:,}".format(stored.get('orgs', 0)) }}</b><span>universities stored</span></div>
+  <div class="card stat"><b>{{ short|length }}{% if short|length == 100 %}+{% endif %}</b><span>sections with fewer unique records than listed</span></div>
+</div>
+<p class="muted">"Listed" is the API's own count{% if api_ts %}, read {{ fmt_ts(api_ts) }}{% endif %}. A programme taught in several countries
+  is stored once, under the first country it was found in, so per-country "stored" can sit below "listed" even when the total is complete.</p>
+
+<div class="card scroll">
+  <h2>Sections by status</h2>
+  <table><tr><th>Type</th><th>Status</th><th>Sections</th><th>Listed</th><th>Unique fetched</th></tr>
+  {% for s in status %}<tr><td>{{ 'Programmes' if s.kind == 'progs' else 'Universities' }}</td><td><span class="pill {{ s.status }}">{{ s.status }}</span></td>
+    <td>{{ "{:,}".format(s.n) }}</td><td>{{ "{:,}".format(s.listed or 0) }}</td><td>{{ "—" if s.status == 'split' else "{:,}".format(s.uniq or 0) }}</td></tr>
+  {% else %}<tr><td colspan="5" class="muted">Nothing planned yet.</td></tr>{% endfor %}
+  </table>
+  <p class="muted" style="margin:8px 0 0">queued = not fetched yet · short = fewer unique than listed, will be read again · split = replaced by smaller sections · done = finished (short ones say so below)</p>
+</div>
+
+{% if short %}
+<div class="card scroll">
+  <h2>Short sections (biggest gap first)</h2>
+  <table><tr><th>Type</th><th>Section</th><th>Listed</th><th>Unique</th><th>Gap</th><th>Passes</th><th>Note</th></tr>
+  {% for s in short %}<tr><td>{{ s.kind }}</td><td>{{ s.label }}</td><td>{{ "{:,}".format(s.listed) }}</td><td>{{ "{:,}".format(s.uniq) }}</td>
+    <td>{{ "{:,}".format(s.listed - s.uniq) }}</td><td>{{ s.passes }}</td><td class="muted">{{ s.note or '' }}</td></tr>{% endfor %}
+  </table>
+</div>
+{% endif %}
+
+<div class="card scroll">
+  <h2>By country</h2>
+  <table><tr><th>Country</th><th>Programmes listed</th><th>Programmes stored</th><th>%</th><th>Universities listed</th><th>Universities stored</th></tr>
+  {% for c in countries %}<tr><td>{{ c.cc }}</td><td>{{ "{:,}".format(c.listed) }}</td><td>{{ "{:,}".format(c.stored) }}</td>
+    <td>{{ "%.0f"|format(100 * c.stored / c.listed) if c.listed else '—' }}</td>
+    <td>{{ "{:,}".format(c.orgs_listed) if c.orgs_listed is not none else '—' }}</td><td>{{ "{:,}".format(c.orgs_stored) }}</td></tr>
+  {% else %}<tr><td colspan="6" class="muted">Run a programmes scrape to see API counts per country.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

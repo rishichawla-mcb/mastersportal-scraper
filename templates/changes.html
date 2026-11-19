@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Changes{% endblock %}
+{% block body %}
+<h1>Changes</h1>
+<div class="card">
+  <form method="get" class="row">
+    <select name="kind"><option value="">Programmes and universities</option>
+      <option value="progs" {% if kind == 'progs' %}selected{% endif %}>Programmes</option>
+      <option value="orgs" {% if kind == 'orgs' %}selected{% endif %}>Universities</option></select>
+    <button>Filter</button>
+    <a href="{{ url_for('export_changes') }}">Download all changes (CSV)</a>
+  </form>
+  <p class="muted" style="margin:8px 0 0">A change is logged only when a content field (title, tuition, duration, degree, location, ranking…) differs
+    from what was stored before. New records, ratings, review counts and "featured" flags are not changes.
+    Tuition is converted to the visitor's currency by the site, so always scrape from the same server.</p>
+</div>
+{% if by_field %}<div class="card"><h2>By field</h2>{% for f in by_field %}<span class="pill">{{ f.field }}: {{ "{:,}".format(f.n) }}</span> {% endfor %}</div>{% endif %}
+<div class="card scroll">
+  <h2>Latest 300</h2>
+  <table><tr><th>When</th><th>Type</th><th>Record</th><th>Field</th><th>Old</th><th>New</th></tr>
+  {% for r in rows %}<tr><td>{{ fmt_ts(r.ts) }}</td><td>{{ r.kind }}</td>
+    <td>{% if r.url %}<a href="{{ r.url }}" target="_blank" rel="noopener noreferrer">{{ r.title or r.rec_id }}</a>{% else %}{{ r.title or r.rec_id }}{% endif %}</td>
+    <td>{{ r.field }}</td><td class="muted">{{ r.old|truncate(120) }}</td><td>{{ r.new|truncate(120) }}</td></tr>
+  {% else %}<tr><td colspan="6" class="muted">No changes recorded yet. They appear when a later run finds different content.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

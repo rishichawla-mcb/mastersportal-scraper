@@ -161,7 +161,8 @@ def create_app(runner=None):
     def job_start():
         try:
             app.runner.start(request.form.get("kind", "both"), request.form.get("delay", "4"),
-                             fresh=request.form.get("fresh") == "1", user=g.user["email"])
+                             fresh=request.form.get("fresh") == "1", user=g.user["email"],
+                             auto_resume=request.form.get("auto_resume") == "1")
             flash("Scrape started.", "ok")
         except (RuntimeError, ValueError) as e:
             flash(str(e), "error")
@@ -192,7 +193,7 @@ def create_app(runner=None):
         w = " AND ".join(where)
         c = db()
         total = c.execute(f"SELECT COUNT(*) FROM rec WHERE {w}", args).fetchone()[0]
-        rows = c.execute(f"SELECT country, json, first_seen, last_seen FROM rec WHERE {w} "
+        rows = c.execute(f"SELECT country, json, first_seen, last_seen, last_changed FROM rec WHERE {w} "
                          f"ORDER BY CAST(id AS INTEGER) LIMIT ? OFFSET ?", args + [PER_PAGE, (page - 1) * PER_PAGE])
         fn = org_row if kind == "orgs" else prog_row
         flat = [dict(zip(cols, fn(r))) for r in rows]
@@ -230,7 +231,7 @@ def create_app(runner=None):
                 w = csv.writer(buf)
                 buf.write("﻿")
                 w.writerow(cols)
-                sql, args = "SELECT country, json, first_seen, last_seen FROM rec WHERE kind=?", [k]
+                sql, args = "SELECT country, json, first_seen, last_seen, last_changed FROM rec WHERE kind=?", [k]
                 if cc:
                     sql, args = sql + " AND country=?", args + [cc]
                 for i, row in enumerate(c.execute(sql + " ORDER BY CAST(id AS INTEGER)", args)):
@@ -246,6 +247,69 @@ def create_app(runner=None):
         name = f"mastersportal_{kind}{'_' + cc if cc else ''}_{time.strftime('%Y-%m-%d')}.csv"
         return Response(stream_with_context(gen()), mimetype="text/csv",
                         headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+    # ---- coverage & changes (KT 3 step 7: how do I know it worked?) -----
+    @app.get("/coverage")
+    @login_required
+    def coverage():
+        c = db()
+        api_total = dbm.meta_get(c, "api_total_progs")
+        api_ts = dbm.meta_get(c, "api_total_progs_ts")
+        stored = {r["kind"]: r["n"] for r in c.execute("SELECT kind, COUNT(*) n FROM rec GROUP BY kind")}
+        status = c.execute("SELECT kind, status, COUNT(*) n, SUM(listed) listed, SUM(uniq) uniq FROM parts "
+                           "GROUP BY kind, status ORDER BY kind, status").fetchall()
+        countries = c.execute("""
+            SELECT l.cc, l.n listed,
+                   (SELECT COUNT(*) FROM rec r WHERE r.kind='progs' AND r.country=l.cc) stored,
+                   (SELECT COUNT(*) FROM rec r WHERE r.kind='orgs' AND r.country=l.cc) orgs_stored,
+                   (SELECT listed FROM parts p WHERE p.kind='orgs' AND p.cc=l.cc AND p.depth=0) orgs_listed
+            FROM listed l WHERE l.kind='progs' ORDER BY l.n DESC""").fetchall()
+        short = c.execute("SELECT kind, part, listed, uniq, passes, status, note FROM parts "
+                          "WHERE uniq < listed AND status IN ('done','short') ORDER BY (listed-uniq) DESC LIMIT 100"
+                          ).fetchall()
+        short = [dict(r, label=" ".join(f["values"][0] for f in json.loads(r["part"]))) for r in short]
+        return render_template("coverage.html", api_total=int(api_total) if api_total else None,
+                               api_ts=float(api_ts) if api_ts else None, stored=stored, status=status,
+                               countries=countries, short=short)
+
+    @app.get("/changes")
+    @login_required
+    def changes():
+        c = db()
+        kind = request.args.get("kind", "")
+        where, args = ("WHERE ch.kind=?", [kind]) if kind in ("progs", "orgs") else ("", [])
+        rows = c.execute(f"SELECT ch.*, json_extract(r.json, '$.title') title, json_extract(r.json, '$.url') url "
+                         f"FROM changes ch LEFT JOIN rec r ON r.kind=ch.kind AND r.id=ch.rec_id {where} "
+                         f"ORDER BY ch.id DESC LIMIT 300", args).fetchall()
+        by_field = c.execute(f"SELECT field, COUNT(*) n FROM changes ch {where} GROUP BY field ORDER BY n DESC",
+                             args).fetchall()
+        return render_template("changes.html", rows=rows, by_field=by_field, kind=kind)
+
+    @app.get("/export/changes.csv")
+    @login_required
+    def export_changes():
+        def gen():
+            c = dbm.connect()
+            try:
+                buf = io.StringIO()
+                w = csv.writer(buf)
+                buf.write("﻿")
+                w.writerow(["kind", "record_id", "title", "field", "old", "new", "changed_at", "job_id"])
+                q = ("SELECT ch.*, json_extract(r.json, '$.title') title FROM changes ch "
+                     "LEFT JOIN rec r ON r.kind=ch.kind AND r.id=ch.rec_id ORDER BY ch.id")
+                for i, r in enumerate(c.execute(q)):
+                    w.writerow([r["kind"], r["rec_id"], r["title"], r["field"], r["old"], r["new"],
+                                time.strftime("%Y-%m-%d %H:%M", time.gmtime(r["ts"])), r["job_id"]])
+                    if i % 500 == 0:
+                        yield buf.getvalue()
+                        buf.seek(0)
+                        buf.truncate()
+                yield buf.getvalue()
+            finally:
+                c.close()
+        return Response(stream_with_context(gen()), mimetype="text/csv",
+                        headers={"Content-Disposition":
+                                 f'attachment; filename="mastersportal_changes_{time.strftime("%Y-%m-%d")}.csv"'})
 
     # ---- users ---------------------------------------------------------
     @app.route("/users", methods=["GET", "POST"])
