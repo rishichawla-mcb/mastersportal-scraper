@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block body %}
+<h1>{{ title }} <span class="muted" style="font-weight:400">· {{ "{:,}".format(total) }} found</span></h1>
+<div class="card">
+  <form method="get" class="row">
+    <input name="q" value="{{ q }}" placeholder="Search name{% if kind == 'programmes' %} or university{% endif %}" style="min-width:260px">
+    <select name="country"><option value="">All countries</option>
+      {% for c in countries %}<option value="{{ c }}" {% if c == country %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
+    <button>Filter</button>
+    <a href="{{ url_for('export', kind=kind, country=country) }}">Download CSV{% if country %} ({{ country }}){% else %} (all){% endif %}</a>
+  </form>
+</div>
+<div class="card scroll">
+  <table>
+    <tr>{% for col in show %}<th>{{ col.replace('_', ' ') }}</th>{% endfor %}</tr>
+    {% for d in rows %}
+      <tr>{% for col in show %}<td>{% if col in ('title', 'name') %}<a href="{{ d.url }}" target="_blank" rel="noopener noreferrer">{{ d[col] }}</a>{% else %}{{ d[col] if d[col] is not none else '' }}{% endif %}</td>{% endfor %}</tr>
+    {% else %}<tr><td colspan="{{ show|length }}" class="muted">Nothing matches.</td></tr>{% endfor %}
+  </table>
+  <div class="pager">
+    {% if page > 1 %}<a href="{{ url_for(request.endpoint, q=q, country=country, page=page-1) }}">← Previous</a>{% endif %}
+    <span class="muted">Page {{ page }} of {{ pages }}</span>
+    {% if page < pages %}<a href="{{ url_for(request.endpoint, q=q, country=country, page=page+1) }}">Next →</a>{% endif %}
+  </div>
+</div>
+{% endblock %}
