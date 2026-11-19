@@ -1,0 +1,22 @@
+[Unit]
+Description=Mastersportal scraper web app
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=mpscraper
+Group=mpscraper
+WorkingDirectory=/opt/mpscraper
+EnvironmentFile=/etc/mpscraper.env
+ExecStart=/opt/mpscraper/venv/bin/python /opt/mpscraper/wsgi.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/mpscraper
+MemoryMax=400M
+
+[Install]
+WantedBy=multi-user.target

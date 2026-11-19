@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block head %}{% if running %}<meta http-equiv="refresh" content="15">{% endif %}{% endblock %}
+{% block body %}
+<h1>Dashboard</h1>
+<div class="grid">
+  <div class="card stat"><b>{{ "{:,}".format(counts.get('progs', 0)) }}</b><span>programmes stored</span></div>
+  <div class="card stat"><b>{{ "{:,}".format(counts.get('orgs', 0)) }}</b><span>universities stored</span></div>
+  <div class="card stat"><b>{{ countries|length }}{% if countries|length == 40 %}+{% endif %}</b><span>countries</span></div>
+  <div class="card stat">
+    <b>{% if current %}<span class="pill {{ current.status }}">{{ current.status }}</span>{% else %}—{% endif %}</b>
+    <span>last job{% if running %} · page refreshes every 15 s{% endif %}</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Scrape</h2>
+  {% if current %}
+    <p style="margin:0">Job #{{ current.id }} · {{ {'orgs':'Universities','progs':'Programmes','both':'Universities + programmes'}[current.kind] }}
+      · delay {{ current.delay }} s · started {{ fmt_ts(current.started) }} by {{ current.started_by or '—' }}</p>
+    {% set pct = (100 * current.parts_done / current.parts_total) if current.parts_total else 0 %}
+    <div class="bar"><i style="width:{{ pct|round(1) }}%"></i></div>
+    <p class="muted" style="margin:0">{{ current.parts_done }} / {{ current.parts_total or '?' }} sections · {{ "{:,}".format(current.requests or 0) }} requests ·
+      +{{ "{:,}".format(current.new or 0) }} new · {{ "{:,}".format(current.updated or 0) }} refreshed · {{ current.message }}</p>
+  {% else %}<p class="muted">No scrape has run yet.</p>{% endif %}
+
+  {% if user.role == 'admin' %}
+  <div style="margin-top:14px">
+  {% if running %}
+    <form method="post" action="{{ url_for('job_stop') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger">Stop</button>
+      <span class="muted">Stops after the current request. Starting again resumes where it stopped.</span></form>
+  {% else %}
+    <form method="post" action="{{ url_for('job_start') }}" class="row">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <select name="kind">
+        <option value="both">Universities + programmes</option>
+        <option value="orgs">Universities only</option>
+        <option value="progs">Programmes only</option>
+      </select>
+      <label>Delay <input name="delay" type="number" min="1" max="30" step="0.5" value="{{ current.delay if current else 4 }}" style="width:70px"> s</label>
+      <label><input type="checkbox" name="fresh" value="1"> Fresh run (refetch everything)</label>
+      <button>Start / resume</button>
+    </form>
+    <p class="muted" style="margin:8px 0 0">Without "fresh", finished sections are skipped. Use "fresh" to refresh all data later (records are updated, never deleted).
+      If a job ends <span class="pill blocked">blocked</span>, wait 30+ minutes and resume with a higher delay.</p>
+  {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% if logs %}
+<div class="card">
+  <h2>Log (latest first)</h2>
+  <pre class="log">{% for l in logs %}{{ fmt_ts(l.ts) }}  {{ l.line }}
+{% endfor %}</pre>
+</div>
+{% endif %}
+
+<div class="grid" style="grid-template-columns:1fr 1fr">
+  <div class="card scroll">
+    <h2>Countries (top 40)</h2>
+    <table><tr><th>Country</th><th>Programmes</th><th>Universities</th><th></th></tr>
+    {% for c in countries %}<tr><td>{{ c.country }}</td><td>{{ "{:,}".format(c.progs) }}</td><td>{{ "{:,}".format(c.orgs) }}</td>
+      <td><a href="{{ url_for('programmes', country=c.country) }}">browse</a></td></tr>{% else %}<tr><td colspan="4" class="muted">No data yet.</td></tr>{% endfor %}
+    </table>
+  </div>
+  <div class="card scroll">
+    <h2>Recent jobs</h2>
+    <table><tr><th>#</th><th>Type</th><th>Status</th><th>Started</th><th>New</th></tr>
+    {% for j in jobs %}<tr><td>{{ j.id }}</td><td>{{ j.kind }}</td><td><span class="pill {{ j.status }}">{{ j.status }}</span></td>
+      <td>{{ fmt_ts(j.started) }}</td><td>{{ "{:,}".format(j.new or 0) }}</td></tr>{% else %}<tr><td colspan="5" class="muted">None yet.</td></tr>{% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}
